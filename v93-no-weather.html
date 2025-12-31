@@ -1,0 +1,2158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EUC Ride Statistics Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container { max-width: 1600px; margin: 0 auto; }
+        h1 { color: #333; margin-bottom: 30px; font-size: 32px; }
+        .file-upload {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .file-upload input { display: none; }
+        .file-upload label {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .file-upload label:hover { background: #2563eb; }
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: none;
+        }
+        .filters h3 {
+            margin-bottom: 15px;
+            font-size: 16px;
+            color: #333;
+        }
+        .filter-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .filter-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .filter-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .filter-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .filter-option input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .filter-option label {
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .slider-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .slider-control input[type="range"] {
+            flex: 1;
+            max-width: 300px;
+        }
+        .slider-value {
+            font-weight: 600;
+            color: #3b82f6;
+            min-width: 60px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-label {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #333;
+        }
+        .stat-sublabel {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .chart-container {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        h2 { margin-bottom: 20px; color: #333; font-size: 20px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+        tr:hover { background: #f9fafb; }
+        .color-box {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+        #loading { display: none; text-align: center; margin: 20px 0; color: #666; }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+        .calendar-day {
+            aspect-ratio: 1;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+        }
+        .calendar-day:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .calendar-header {
+            font-weight: 600;
+            color: #666;
+            padding: 8px;
+            text-align: center;
+        }
+        .day-empty {
+            background: #fafafa;
+        }
+        .day-no-ride {
+            background: white;
+        }
+        .day-rode {
+            background: #10b981;
+            color: white;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+            <h1 style="margin: 0;">EUC Ride Statistics Dashboard</h1>
+            <a href="#" id="extractorLink" style="background: #10b981; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">📥 Get Data from EUCWorld</a>
+        </div>
+        
+        <div class="file-upload">
+            <input type="file" id="fileInput" accept=".txt">
+            <label for="fileInput">Choose Your EUC Data File</label>
+            <p style="margin-top: 10px; color: #666;">Select your EUCWorldStats.txt file</p>
+        </div>
+
+        <div id="loading">Loading and analyzing data...</div>
+        
+        <div class="filters" id="filters">
+            <div class="filter-section">
+                <h3>Date Range Filter</h3>
+                <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Start Date</label>
+                        <input type="date" id="startDate" style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">End Date</label>
+                        <input type="date" id="endDate" style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <button onclick="clearDateRange()" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 18px;">Clear</button>
+                </div>
+            </div>
+            <div class="filter-section">
+                <h3>Filter by Wheel Model</h3>
+                <div class="filter-options" id="filterOptions"></div>
+            </div>
+            <div class="filter-section">
+                <h3>Minimum Ride Distance</h3>
+                <div class="slider-control">
+                    <input type="range" id="minDistance" min="0" max="20" step="0.5" value="0">
+                    <span class="slider-value" id="minDistanceValue">0 mi</span>
+                </div>
+                <p style="font-size: 12px; color: #666; margin-top: 8px;">Filter out rides shorter than this distance</p>
+            </div>
+            <div class="filter-section">
+                <h3>Filter by Location (Top 5)</h3>
+                <div class="filter-options" id="locationFilterOptions"></div>
+            </div>
+        </div>
+
+        <div id="dashboard" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Distance</div>
+                    <div class="stat-value" id="totalDistance">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Rides</div>
+                    <div class="stat-value" id="totalRides">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Distance/Ride</div>
+                    <div class="stat-value" id="avgDistance">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Speed</div>
+                    <div class="stat-value" id="avgSpeed">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Max Speed Ever</div>
+                    <div class="stat-value" id="maxSpeedEver">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Max Speed</div>
+                    <div class="stat-value" id="avgMaxSpeed">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Days Ridden 2024</div>
+                    <div class="stat-value" id="days2024">-</div>
+                    <div class="stat-sublabel" id="days2024percent">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Days Ridden 2025</div>
+                    <div class="stat-value" id="days2025">-</div>
+                    <div class="stat-sublabel" id="days2025percent">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Days/Year</div>
+                    <div class="stat-value" id="avgDaysYear">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Longest Ride</div>
+                    <div class="stat-value" id="longestRide">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Ride Time</div>
+                    <div class="stat-value" id="totalTime">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Rides Filtered</div>
+                    <div class="stat-value" id="ridesFiltered">-</div>
+                    <div class="stat-sublabel" id="ridesFilteredPercent">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Current Streak</div>
+                    <div class="stat-value" id="currentStreak">-</div>
+                    <div class="stat-sublabel" id="currentStreakDates">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Longest Streak</div>
+                    <div class="stat-value" id="longestStreak">-</div>
+                    <div class="stat-sublabel" id="longestStreakDates">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">This Week</div>
+                    <div class="stat-value" id="thisWeek">-</div>
+                    <div class="stat-sublabel" id="thisWeekDetail">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Last Week</div>
+                    <div class="stat-value" id="lastWeek">-</div>
+                    <div class="stat-sublabel" id="lastWeekDetail">-</div>
+                </div>
+            </div>
+
+            <div id="monthlyBestsBox" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; padding: 20px; margin-bottom: 20px; color: white;">
+                <h2 style="margin: 0 0 15px 0; font-size: 20px; font-weight: 700;">🏆 This Month's Personal Bests</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 6px;">
+                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">Longest Single Ride</div>
+                        <div style="font-size: 24px; font-weight: 700;" id="monthBestDistance">-</div>
+                        <div style="font-size: 11px; opacity: 0.8; margin-top: 3px;" id="monthBestDistanceDate">-</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 6px;">
+                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">Fastest Avg Speed</div>
+                        <div style="font-size: 24px; font-weight: 700;" id="monthBestSpeed">-</div>
+                        <div style="font-size: 11px; opacity: 0.8; margin-top: 3px;" id="monthBestSpeedDate">-</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 6px;">
+                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">Most Distance in a Day</div>
+                        <div style="font-size: 24px; font-weight: 700;" id="monthBestDayDistance">-</div>
+                        <div style="font-size: 11px; opacity: 0.8; margin-top: 3px;" id="monthBestDayDistanceDate">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <h2>Monthly Distance (mi)</h2>
+                    <div id="comparisonBox" style="display: none; background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #1e40af;">Comparing Months</h3>
+                                <div id="comparisonContent"></div>
+                            </div>
+                            <button onclick="clearComparison()" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">Clear</button>
+                        </div>
+                    </div>
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h2>Monthly Ride Count</h2>
+                    <canvas id="monthlyRidesChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-grid" style="grid-template-columns: 450px 1fr 1fr;">
+                <div class="chart-container">
+                    <h2>Time of Day Distribution</h2>
+                    <canvas id="timeOfDayChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h2 style="margin: 0;">Avg Speed Distribution</h2>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 12px; color: #666;">Bucket size:</label>
+                            <select id="speedBucketSize" onchange="applyFilters()" style="padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                                <option value="1">1 mph</option>
+                                <option value="2" selected>2 mph</option>
+                                <option value="3">3 mph</option>
+                                <option value="5">5 mph</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="speedDistTable" style="max-height: 400px; overflow-y: auto;"></div>
+                </div>
+                <div class="chart-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h2 style="margin: 0;">Max Speed Distribution</h2>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 12px; color: #666;">Bucket size:</label>
+                            <select id="maxSpeedBucketSize" onchange="applyFilters()" style="padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                                <option value="1">1 mph</option>
+                                <option value="2">2 mph</option>
+                                <option value="3">3 mph</option>
+                                <option value="5" selected>5 mph</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="maxSpeedDistTable" style="max-height: 400px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h2>Individual Wheel Statistics</h2>
+                <table id="modelTable">
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Total Rides</th>
+                            <th>Total Distance</th>
+                            <th>Avg Distance</th>
+                            <th>Avg Speed</th>
+                            <th>Max Speed</th>
+                            <th>% of Total Distance</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            
+            <div class="chart-container">
+                <h2>Riding Calendar</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <button onclick="changeCalendarMonth(-1)" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">←</button>
+                        <button onclick="changeCalendarMonth(1)" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">→</button>
+                    </div>
+                    <h3 id="calendarMonth" style="margin: 0;">January 2025</h3>
+                    <div>
+                        <select id="calendarZoom" onchange="changeCalendarZoom()" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="1">1 Month</option>
+                            <option value="3">3 Months</option>
+                            <option value="6">6 Months</option>
+                            <option value="12">Year View</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="calendar"></div>
+                <div style="display: flex; gap: 20px; margin-top: 15px; font-size: 14px; flex-wrap: wrap;">
+                    <div><span style="display: inline-block; width: 20px; height: 20px; background: #10b981; border-radius: 4px; vertical-align: middle;"></span> Rode</div>
+                    <div><span style="display: inline-block; width: 20px; height: 20px; background: #10b981; border-radius: 4px; vertical-align: middle; box-shadow: 0 0 0 3px #8b5cf6 inset;"></span> Selected Wheel</div>
+                    <div><span style="display: inline-block; width: 20px; height: 20px; background: #10b981; border-radius: 4px; vertical-align: middle; box-shadow: 0 0 0 3px #ef4444 inset;"></span> Selected Time</div>
+                </div>
+                <div id="rideDetails" style="display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 2px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <h3 style="margin: 0; color: #333;" id="rideDetailsDate">-</h3>
+                        <button onclick="closeRideDetails()" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Close</button>
+                    </div>
+                    <div id="rideDetailsList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#14b8a6'];
+        var allRides = [];
+        var selectedModels = {};
+        var selectedLocations = {};
+        var minDistanceFilter = 0;
+        var selectedMonths = [];
+        var comparisonData = null;
+        var calendarMonth = new Date();
+        var calendarZoom = 1;
+        var startDateFilter = null;
+        var endDateFilter = null;
+        var allLocationsList = [];
+        var currentLocationPage = 0;
+        var selectedWheelModel = null;
+        var filteredRides = null;
+        var selectedTimeOfDay = null;
+
+        function selectWheelModel(modelName) {
+            if (selectedWheelModel === modelName) {
+                selectedWheelModel = null;
+                console.log('🔵 Deselected wheel model');
+            } else {
+                selectedWheelModel = modelName;
+                console.log('🔵 Selected wheel model:', modelName);
+            }
+            applyFilters();
+        }
+
+        function selectTimeOfDay(timeLabel) {
+            if (selectedTimeOfDay === timeLabel) {
+                selectedTimeOfDay = null;
+                console.log('🕐 Deselected time of day');
+            } else {
+                selectedTimeOfDay = timeLabel;
+                console.log('🕐 Selected time of day:', timeLabel);
+            }
+            applyFilters();
+        }
+
+        function getRideTimeOfDay(ride) {
+            var hour = ride.date.getHours();
+            if (hour >= 5 && hour < 12) return 'Morning (5am-12pm)';
+            if (hour >= 12 && hour < 17) return 'Afternoon (12pm-5pm)';
+            if (hour >= 17 && hour < 21) return 'Evening (5pm-9pm)';
+            return 'Night (9pm-5am)';
+        }
+
+        function parseEUCData(text) {
+            var rides = [];
+            var entries = text.split('|||');
+            
+            console.log('Parsing', entries.length, 'entries');
+            
+            for (var i = 0; i < entries.length; i++) {
+                var entry = entries[i].trim();
+                
+                if (!entry || entry.length < 20) continue;
+                
+                var lines = entry.split('\n');
+                var location = lines[0] ? lines[0].trim() : 'Unknown';
+                
+                var dateMatch = entry.match(/(January|February|March|April|May|June|July|August|September|October|November|December) \d+, \d{4}/);
+                var timeMatch = entry.match(/(January|February|March|April|May|June|July|August|September|October|November|December) \d+, \d{4}\s+(\d+):(\d+)\s*(AM|PM)/);
+                var avgMatch = entry.match(/(\d+) mphAVG/);
+                var maxMatch = entry.match(/(\d+) mphMAX/);
+                var distMatch = entry.match(/([\d.]+) mi/);
+
+                if (!dateMatch || !distMatch) continue;
+
+                var model = 'Unknown';
+
+                for (var j = 0; j < lines.length; j++) {
+                    var line = lines[j];
+
+                    var bulletMatch = line.match(/([A-Za-z][A-Za-z0-9\s]+?)[\s\u2022\u00B7•∙·]\s*(\d+\.?\d*)\s*mi/);
+                    if (bulletMatch && bulletMatch[1]) {
+                        var potentialModel = bulletMatch[1].trim();
+                        if (potentialModel.length > 3 && isNaN(parseFloat(potentialModel))) {
+                            model = potentialModel;
+                            break;
+                        }
+                    }
+                }
+
+                var distance = parseFloat(distMatch[1]);
+                if (distance > 0) {
+                    var date;
+                    if (timeMatch) {
+                        // Parse with time
+                        var hours = parseInt(timeMatch[2]);
+                        var minutes = parseInt(timeMatch[3]);
+                        var ampm = timeMatch[4];
+
+                        if (ampm === 'PM' && hours !== 12) hours += 12;
+                        if (ampm === 'AM' && hours === 12) hours = 0;
+
+                        date = new Date(dateMatch[0]);
+                        date.setHours(hours, minutes, 0, 0);
+                    } else {
+                        date = new Date(dateMatch[0]);
+                    }
+                    if (!isNaN(date.getTime())) {
+                        rides.push({
+                            date: date,
+                            avgSpeed: avgMatch ? parseInt(avgMatch[1]) : 0,
+                            maxSpeed: maxMatch ? parseInt(maxMatch[1]) : 0,
+                            distance: distance,
+                            model: model,
+                            location: location
+                        });
+                    }
+                }
+            }
+            
+            console.log('Parsed', rides.length, 'rides');
+            if (rides.length > 0) {
+                console.log('Sample ride:', rides[0]);
+            }
+            
+            rides.sort(function(a, b) { return a.date - b.date; });
+            return rides;
+        }
+
+        function analyzeData(rides) {
+            var totalDistance = 0;
+            var totalSpeed = 0;
+            var maxSpeed = 0;
+            var totalMaxSpeed = 0;
+            var longestRide = 0;
+
+            for (var i = 0; i < rides.length; i++) {
+                totalDistance += rides[i].distance;
+                totalSpeed += rides[i].avgSpeed;
+                totalMaxSpeed += rides[i].maxSpeed;
+                if (rides[i].maxSpeed > maxSpeed) {
+                    maxSpeed = rides[i].maxSpeed;
+                }
+                if (rides[i].distance > longestRide) {
+                    longestRide = rides[i].distance;
+                }
+            }
+
+            var totalRides = rides.length;
+            var avgDistance = totalDistance / totalRides;
+            var avgSpeed = totalSpeed / totalRides;
+            var avgMaxSpeed = totalMaxSpeed / totalRides;
+            var estimatedTotalHours = totalDistance / avgSpeed;
+            var totalFilteredOut = allRides.length - totalRides;
+            
+            var modelStats = {};
+            for (var j = 0; j < rides.length; j++) {
+                var r = rides[j];
+                if (!modelStats[r.model]) {
+                    modelStats[r.model] = { count: 0, distance: 0, maxSpeed: 0, totalSpeed: 0 };
+                }
+                modelStats[r.model].count++;
+                modelStats[r.model].distance += r.distance;
+                modelStats[r.model].totalSpeed += r.avgSpeed;
+                if (r.maxSpeed > modelStats[r.model].maxSpeed) {
+                    modelStats[r.model].maxSpeed = r.maxSpeed;
+                }
+            }
+
+            var monthlyStats = {};
+            var uniqueDays2024 = {};
+            var uniqueDays2025 = {};
+            var yearDays = {};
+            
+            for (var k = 0; k < rides.length; k++) {
+                var ride = rides[k];
+                var year = ride.date.getFullYear();
+                var month = ride.date.getMonth() + 1;
+                var monthStr = month < 10 ? '0' + month : '' + month;
+                var key = year + '-' + monthStr;
+                var dateKey = year + '-' + monthStr + '-' + ride.date.getDate();
+                
+                if (!monthlyStats[key]) {
+                    monthlyStats[key] = { distance: 0, rides: 0 };
+                }
+                monthlyStats[key].distance += ride.distance;
+                monthlyStats[key].rides++;
+                
+                if (year === 2024) {
+                    uniqueDays2024[dateKey] = true;
+                }
+                if (year === 2025) {
+                    uniqueDays2025[dateKey] = true;
+                }
+                
+                if (!yearDays[year]) {
+                    yearDays[year] = {};
+                }
+                yearDays[year][dateKey] = true;
+            }
+            
+            var days2024 = Object.keys(uniqueDays2024).length;
+            var days2025 = Object.keys(uniqueDays2025).length;
+            
+            var totalDaysAcrossYears = 0;
+            var yearsCount = Object.keys(yearDays).length;
+            for (var year in yearDays) {
+                totalDaysAcrossYears += Object.keys(yearDays[year]).length;
+            }
+            var avgDaysYear = yearsCount > 0 ? (totalDaysAcrossYears / yearsCount).toFixed(0) : 0;
+
+            // Calculate streaks
+            var allUniqueDays = {};
+            for (var s = 0; s < rides.length; s++) {
+                var rideDate = rides[s].date;
+                var dayKey = rideDate.getFullYear() + '-' +
+                           (rideDate.getMonth() + 1).toString().padStart(2, '0') + '-' +
+                           rideDate.getDate().toString().padStart(2, '0');
+                allUniqueDays[dayKey] = rideDate;
+            }
+
+            var sortedDays = Object.keys(allUniqueDays).sort();
+            var currentStreak = 0;
+            var currentStreakStart = null;
+            var currentStreakEnd = null;
+            var longestStreak = 0;
+            var longestStreakStart = null;
+            var longestStreakEnd = null;
+            var tempStreak = 0;
+            var tempStart = null;
+
+            // Check current streak (from today backwards)
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            var checkDate = new Date(today);
+
+            for (var d = 0; d < 365; d++) {
+                var checkKey = checkDate.getFullYear() + '-' +
+                             (checkDate.getMonth() + 1).toString().padStart(2, '0') + '-' +
+                             checkDate.getDate().toString().padStart(2, '0');
+
+                if (allUniqueDays[checkKey]) {
+                    currentStreak++;
+                    if (!currentStreakEnd) currentStreakEnd = new Date(checkDate);
+                    currentStreakStart = new Date(checkDate);
+                } else {
+                    if (d === 0 && !allUniqueDays[checkKey]) {
+                        // Today has no ride, check yesterday
+                        checkDate.setDate(checkDate.getDate() - 1);
+                        continue;
+                    }
+                    break;
+                }
+                checkDate.setDate(checkDate.getDate() - 1);
+            }
+
+            // Calculate longest streak
+            for (var i = 0; i < sortedDays.length; i++) {
+                if (i === 0) {
+                    tempStreak = 1;
+                    tempStart = allUniqueDays[sortedDays[i]];
+                } else {
+                    var prevDate = new Date(allUniqueDays[sortedDays[i - 1]]);
+                    var currDate = new Date(allUniqueDays[sortedDays[i]]);
+                    var diffDays = Math.round((currDate - prevDate) / (1000 * 60 * 60 * 24));
+
+                    if (diffDays === 1) {
+                        tempStreak++;
+                    } else {
+                        if (tempStreak > longestStreak) {
+                            longestStreak = tempStreak;
+                            longestStreakStart = tempStart;
+                            longestStreakEnd = allUniqueDays[sortedDays[i - 1]];
+                        }
+                        tempStreak = 1;
+                        tempStart = currDate;
+                    }
+                }
+            }
+
+            // Check final streak
+            if (tempStreak > longestStreak) {
+                longestStreak = tempStreak;
+                longestStreakStart = tempStart;
+                longestStreakEnd = allUniqueDays[sortedDays[sortedDays.length - 1]];
+            }
+
+            // Calculate this week vs last week
+            var now = new Date();
+            var dayOfWeek = now.getDay(); // 0 = Sunday
+            var thisWeekStart = new Date(now);
+            thisWeekStart.setDate(now.getDate() - dayOfWeek);
+            thisWeekStart.setHours(0, 0, 0, 0);
+
+            var thisWeekEnd = new Date(thisWeekStart);
+            thisWeekEnd.setDate(thisWeekStart.getDate() + 6);
+            thisWeekEnd.setHours(23, 59, 59, 999);
+
+            var lastWeekStart = new Date(thisWeekStart);
+            lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+
+            var lastWeekEnd = new Date(thisWeekStart);
+            lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+            lastWeekEnd.setHours(23, 59, 59, 999);
+
+            var thisWeekRides = 0;
+            var thisWeekDistance = 0;
+            var lastWeekRides = 0;
+            var lastWeekDistance = 0;
+
+            for (var w = 0; w < rides.length; w++) {
+                var rideTime = rides[w].date.getTime();
+                if (rideTime >= thisWeekStart.getTime() && rideTime <= thisWeekEnd.getTime()) {
+                    thisWeekRides++;
+                    thisWeekDistance += rides[w].distance;
+                } else if (rideTime >= lastWeekStart.getTime() && rideTime <= lastWeekEnd.getTime()) {
+                    lastWeekRides++;
+                    lastWeekDistance += rides[w].distance;
+                }
+            }
+
+            // Calculate this month's personal bests
+            var currentMonth = now.getMonth();
+            var currentYear = now.getFullYear();
+            var monthBestDistance = 0;
+            var monthBestDistanceRide = null;
+            var monthBestSpeed = 0;
+            var monthBestSpeedRide = null;
+            var monthDayDistances = {};
+
+            for (var m = 0; m < rides.length; m++) {
+                var ride = rides[m];
+                if (ride.date.getMonth() === currentMonth && ride.date.getFullYear() === currentYear) {
+                    // Longest single ride
+                    if (ride.distance > monthBestDistance) {
+                        monthBestDistance = ride.distance;
+                        monthBestDistanceRide = ride;
+                    }
+                    // Fastest avg speed
+                    if (ride.avgSpeed > monthBestSpeed) {
+                        monthBestSpeed = ride.avgSpeed;
+                        monthBestSpeedRide = ride;
+                    }
+                    // Most distance in a day
+                    var dayKey = ride.date.getFullYear() + '-' +
+                               (ride.date.getMonth() + 1).toString().padStart(2, '0') + '-' +
+                               ride.date.getDate().toString().padStart(2, '0');
+                    if (!monthDayDistances[dayKey]) {
+                        monthDayDistances[dayKey] = { total: 0, date: ride.date };
+                    }
+                    monthDayDistances[dayKey].total += ride.distance;
+                }
+            }
+
+            var monthBestDayDistance = 0;
+            var monthBestDayDistanceDate = null;
+            for (var dayKey in monthDayDistances) {
+                if (monthDayDistances[dayKey].total > monthBestDayDistance) {
+                    monthBestDayDistance = monthDayDistances[dayKey].total;
+                    monthBestDayDistanceDate = monthDayDistances[dayKey].date;
+                }
+            }
+
+            // Calculate time of day distribution
+            var timeOfDay = {
+                morning: 0,    // 5am-12pm
+                afternoon: 0,  // 12pm-5pm
+                evening: 0,    // 5pm-9pm
+                night: 0       // 9pm-5am
+            };
+
+            for (var t = 0; t < rides.length; t++) {
+                var hour = rides[t].date.getHours();
+                if (hour >= 5 && hour < 12) {
+                    timeOfDay.morning++;
+                } else if (hour >= 12 && hour < 17) {
+                    timeOfDay.afternoon++;
+                } else if (hour >= 17 && hour < 21) {
+                    timeOfDay.evening++;
+                } else {
+                    timeOfDay.night++;
+                }
+            }
+
+            // Calculate speed distribution with configurable buckets
+            var bucketSizeEl = document.getElementById('speedBucketSize');
+            var bucketSize = bucketSizeEl ? parseInt(bucketSizeEl.value) : 2;
+            var speedBuckets = {};
+            var maxAvgSpeed = 0;
+
+            for (var s = 0; s < rides.length; s++) {
+                var speed = rides[s].avgSpeed;
+                if (speed > maxAvgSpeed) maxAvgSpeed = speed;
+            }
+
+            // Create buckets dynamically
+            for (var b = 0; b <= maxAvgSpeed; b += bucketSize) {
+                var rangeKey = b + '-' + (b + bucketSize - 1);
+                speedBuckets[rangeKey] = 0;
+            }
+
+            // Count rides in each bucket
+            for (var s = 0; s < rides.length; s++) {
+                var speed = rides[s].avgSpeed;
+                var bucketStart = Math.floor(speed / bucketSize) * bucketSize;
+                var rangeKey = bucketStart + '-' + (bucketStart + bucketSize - 1);
+                if (speedBuckets[rangeKey] !== undefined) {
+                    speedBuckets[rangeKey]++;
+                }
+            }
+
+            // Calculate max speed distribution with configurable buckets
+            var maxBucketSizeEl = document.getElementById('maxSpeedBucketSize');
+            var maxBucketSize = maxBucketSizeEl ? parseInt(maxBucketSizeEl.value) : 5;
+            var maxSpeedBuckets = {};
+            var highestMaxSpeed = 0;
+
+            for (var s = 0; s < rides.length; s++) {
+                var mSpeed = rides[s].maxSpeed;
+                if (mSpeed > highestMaxSpeed) highestMaxSpeed = mSpeed;
+            }
+
+            // Create buckets dynamically for max speeds
+            for (var b = 0; b <= highestMaxSpeed; b += maxBucketSize) {
+                var rangeKey = b + '-' + (b + maxBucketSize - 1);
+                maxSpeedBuckets[rangeKey] = 0;
+            }
+
+            // Count rides in each max speed bucket
+            for (var s = 0; s < rides.length; s++) {
+                var mSpeed = rides[s].maxSpeed;
+                var bucketStart = Math.floor(mSpeed / maxBucketSize) * maxBucketSize;
+                var rangeKey = bucketStart + '-' + (bucketStart + maxBucketSize - 1);
+                if (maxSpeedBuckets[rangeKey] !== undefined) {
+                    maxSpeedBuckets[rangeKey]++;
+                }
+            }
+
+            return {
+                totalDistance: totalDistance.toFixed(1),
+                totalRides: totalRides,
+                avgDistance: avgDistance.toFixed(1),
+                avgSpeed: avgSpeed.toFixed(1),
+                maxSpeed: maxSpeed,
+                avgMaxSpeed: avgMaxSpeed.toFixed(1),
+                longestRide: longestRide.toFixed(1),
+                totalTime: estimatedTotalHours.toFixed(0),
+                totalFilteredOut: totalFilteredOut,
+                modelStats: modelStats,
+                monthlyStats: monthlyStats,
+                days2024: days2024,
+                days2025: days2025,
+                avgDaysYear: avgDaysYear,
+                currentStreak: currentStreak,
+                currentStreakStart: currentStreakStart,
+                currentStreakEnd: currentStreakEnd,
+                longestStreak: longestStreak,
+                longestStreakStart: longestStreakStart,
+                longestStreakEnd: longestStreakEnd,
+                thisWeekRides: thisWeekRides,
+                thisWeekDistance: thisWeekDistance,
+                lastWeekRides: lastWeekRides,
+                lastWeekDistance: lastWeekDistance,
+                monthBestDistance: monthBestDistance,
+                monthBestDistanceRide: monthBestDistanceRide,
+                monthBestSpeed: monthBestSpeed,
+                monthBestSpeedRide: monthBestSpeedRide,
+                monthBestDayDistance: monthBestDayDistance,
+                monthBestDayDistanceDate: monthBestDayDistanceDate,
+                timeOfDay: timeOfDay,
+                speedBuckets: speedBuckets,
+                maxSpeedBuckets: maxSpeedBuckets
+            };
+        }
+
+        function updateDashboard(stats) {
+            comparisonData = stats.monthlyStats;
+
+            document.getElementById('totalDistance').textContent = stats.totalDistance + ' mi';
+            document.getElementById('totalRides').textContent = stats.totalRides;
+            document.getElementById('avgDistance').textContent = stats.avgDistance + ' mi';
+            document.getElementById('avgSpeed').textContent = stats.avgSpeed + ' mph';
+            document.getElementById('maxSpeedEver').textContent = stats.maxSpeed + ' mph';
+            document.getElementById('avgMaxSpeed').textContent = stats.avgMaxSpeed + ' mph';
+            document.getElementById('days2024').textContent = stats.days2024;
+            document.getElementById('days2024percent').textContent = (stats.days2024 / 366 * 100).toFixed(1) + '% of year';
+            document.getElementById('days2025').textContent = stats.days2025;
+
+            var today = new Date();
+            var startOfYear = new Date(today.getFullYear(), 0, 1);
+            var daysPassed = Math.ceil((today - startOfYear) / (1000 * 60 * 60 * 24));
+            document.getElementById('days2025percent').textContent = (stats.days2025 / daysPassed * 100).toFixed(1) + '% of days so far';
+            document.getElementById('avgDaysYear').textContent = stats.avgDaysYear;
+            document.getElementById('longestRide').textContent = stats.longestRide + ' mi';
+            document.getElementById('totalTime').textContent = stats.totalTime + ' hrs';
+            document.getElementById('ridesFiltered').textContent = stats.totalFilteredOut;
+            document.getElementById('ridesFilteredPercent').textContent = 'of ' + allRides.length + ' total';
+
+            // Update streak statistics
+            document.getElementById('currentStreak').textContent = stats.currentStreak + ' days';
+            if (stats.currentStreak > 0 && stats.currentStreakStart && stats.currentStreakEnd) {
+                var startStr = (stats.currentStreakStart.getMonth() + 1) + '/' + stats.currentStreakStart.getDate();
+                var endStr = (stats.currentStreakEnd.getMonth() + 1) + '/' + stats.currentStreakEnd.getDate();
+                document.getElementById('currentStreakDates').textContent = startStr + ' to ' + endStr;
+            } else {
+                document.getElementById('currentStreakDates').textContent = 'No active streak';
+            }
+
+            document.getElementById('longestStreak').textContent = stats.longestStreak + ' days';
+            if (stats.longestStreak > 0 && stats.longestStreakStart && stats.longestStreakEnd) {
+                var lStartStr = (stats.longestStreakStart.getMonth() + 1) + '/' + stats.longestStreakStart.getDate() + '/' + stats.longestStreakStart.getFullYear();
+                var lEndStr = (stats.longestStreakEnd.getMonth() + 1) + '/' + stats.longestStreakEnd.getDate() + '/' + stats.longestStreakEnd.getFullYear();
+                document.getElementById('longestStreakDates').textContent = lStartStr + ' to ' + lEndStr;
+            } else {
+                document.getElementById('longestStreakDates').textContent = '-';
+            }
+
+            // Update week comparison statistics
+            var ridesDiff = stats.thisWeekRides - stats.lastWeekRides;
+            var distDiff = stats.thisWeekDistance - stats.lastWeekDistance;
+            var ridesArrow = ridesDiff > 0 ? ' ↑' : (ridesDiff < 0 ? ' ↓' : ' →');
+            var ridesColor = ridesDiff > 0 ? '#10b981' : (ridesDiff < 0 ? '#ef4444' : '#6b7280');
+
+            document.getElementById('thisWeek').textContent = stats.thisWeekRides + ' rides';
+            document.getElementById('thisWeekDetail').innerHTML = stats.thisWeekDistance.toFixed(1) + ' mi <span style="color: ' + ridesColor + ';">' + ridesArrow + Math.abs(ridesDiff) + ' rides</span>';
+
+            document.getElementById('lastWeek').textContent = stats.lastWeekRides + ' rides';
+            document.getElementById('lastWeekDetail').textContent = stats.lastWeekDistance.toFixed(1) + ' mi';
+
+            // Update monthly personal bests
+            if (stats.monthBestDistanceRide) {
+                document.getElementById('monthBestDistance').textContent = stats.monthBestDistance.toFixed(1) + ' mi';
+                var distDate = stats.monthBestDistanceRide.date;
+                document.getElementById('monthBestDistanceDate').textContent = (distDate.getMonth() + 1) + '/' + distDate.getDate() + ' - ' + stats.monthBestDistanceRide.model;
+            } else {
+                document.getElementById('monthBestDistance').textContent = '-';
+                document.getElementById('monthBestDistanceDate').textContent = 'No rides this month';
+            }
+
+            if (stats.monthBestSpeedRide) {
+                document.getElementById('monthBestSpeed').textContent = stats.monthBestSpeed + ' mph';
+                var speedDate = stats.monthBestSpeedRide.date;
+                document.getElementById('monthBestSpeedDate').textContent = (speedDate.getMonth() + 1) + '/' + speedDate.getDate() + ' - ' + stats.monthBestSpeedRide.distance.toFixed(1) + ' mi ride';
+            } else {
+                document.getElementById('monthBestSpeed').textContent = '-';
+                document.getElementById('monthBestSpeedDate').textContent = 'No rides this month';
+            }
+
+            if (stats.monthBestDayDistanceDate) {
+                document.getElementById('monthBestDayDistance').textContent = stats.monthBestDayDistance.toFixed(1) + ' mi';
+                document.getElementById('monthBestDayDistanceDate').textContent = (stats.monthBestDayDistanceDate.getMonth() + 1) + '/' + stats.monthBestDayDistanceDate.getDate();
+            } else {
+                document.getElementById('monthBestDayDistance').textContent = '-';
+                document.getElementById('monthBestDayDistanceDate').textContent = 'No rides this month';
+            }
+
+            var modelKeys = Object.keys(stats.modelStats);
+            var modelData = [];
+            var totalDist = parseFloat(stats.totalDistance);
+            
+            for (var i = 0; i < modelKeys.length; i++) {
+                var key = modelKeys[i];
+                var mStats = stats.modelStats[key];
+                modelData.push({
+                    model: key,
+                    count: mStats.count,
+                    distance: mStats.distance,
+                    maxSpeed: mStats.maxSpeed,
+                    avgSpeed: (mStats.totalSpeed / mStats.count).toFixed(1),
+                    percent: (mStats.distance / totalDist * 100).toFixed(1)
+                });
+            }
+            
+            modelData.sort(function(a, b) { return b.distance - a.distance; });
+
+            var monthKeys = Object.keys(stats.monthlyStats).sort();
+            var monthLabels = [];
+            var monthDistances = [];
+            var monthRides = [];
+            
+            for (var m = 0; m < monthKeys.length; m++) {
+                monthLabels.push(monthKeys[m]);
+                monthDistances.push(stats.monthlyStats[monthKeys[m]].distance.toFixed(1));
+                monthRides.push(stats.monthlyStats[monthKeys[m]].rides);
+            }
+
+            var monthlyChartEl = document.getElementById('monthlyChart');
+            var monthlyRidesChartEl = document.getElementById('monthlyRidesChart');
+            
+            if (window.monthlyDistChart && typeof window.monthlyDistChart.destroy === 'function') {
+                window.monthlyDistChart.destroy();
+            }
+            if (window.monthlyRidesChart && typeof window.monthlyRidesChart.destroy === 'function') {
+                window.monthlyRidesChart.destroy();
+            }
+
+            window.monthlyDistChart = new Chart(monthlyChartEl, {
+                type: 'bar',
+                data: {
+                    labels: monthLabels,
+                    datasets: [{
+                        label: 'Distance (mi)',
+                        data: monthDistances,
+                        backgroundColor: monthLabels.map(function(label) {
+                            return selectedMonths.indexOf(label) >= 0 ? '#10b981' : colors[0];
+                        })
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            var index = elements[0].index;
+                            var month = monthLabels[index];
+                            toggleMonthSelection(month, stats.monthlyStats[month]);
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' mi';
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    var month = context.label;
+                                    var rides = stats.monthlyStats[month].rides;
+                                    return 'Rides: ' + rides;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            window.monthlyRidesChart = new Chart(monthlyRidesChartEl, {
+                type: 'bar',
+                data: {
+                    labels: monthLabels,
+                    datasets: [{
+                        label: 'Number of Rides',
+                        data: monthRides,
+                        backgroundColor: monthLabels.map(function(label) {
+                            return selectedMonths.indexOf(label) >= 0 ? '#10b981' : colors[1];
+                        })
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            var index = elements[0].index;
+                            var month = monthLabels[index];
+                            toggleMonthSelection(month, stats.monthlyStats[month]);
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    var month = context.label;
+                                    var distance = stats.monthlyStats[month].distance.toFixed(1);
+                                    return 'Distance: ' + distance + ' mi';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Time of Day Chart
+            var timeOfDayChartEl = document.getElementById('timeOfDayChart');
+            if (window.timeOfDayChart && typeof window.timeOfDayChart.destroy === 'function') {
+                window.timeOfDayChart.destroy();
+            }
+
+            window.timeOfDayChart = new Chart(timeOfDayChartEl, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Morning (5am-12pm)', 'Afternoon (12pm-5pm)', 'Evening (5pm-9pm)', 'Night (9pm-5am)'],
+                    datasets: [{
+                        data: [stats.timeOfDay.morning, stats.timeOfDay.afternoon, stats.timeOfDay.evening, stats.timeOfDay.night],
+                        backgroundColor: ['#fbbf24', '#f59e0b', '#f97316', '#1e40af'],
+                        borderWidth: function(context) {
+                            var label = context.chart.data.labels[context.dataIndex];
+                            return selectedTimeOfDay === label ? 6 : 0;
+                        },
+                        borderColor: '#ef4444'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    onClick: function(event, elements) {
+                        if (elements.length > 0) {
+                            var index = elements[0].index;
+                            var label = this.data.labels[index];
+                            selectTimeOfDay(label);
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    var label = context.label || '';
+                                    var value = context.parsed || 0;
+                                    var total = stats.totalRides;
+                                    var percent = ((value / total) * 100).toFixed(1);
+                                    return label + ': ' + value + ' rides (' + percent + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Speed Distribution Table
+            var speedDistTableEl = document.getElementById('speedDistTable');
+            var speedTableHTML = '<table style="width: 100%; font-size: 13px;">';
+            speedTableHTML += '<thead><tr style="border-bottom: 2px solid #e5e7eb;"><th style="text-align: left; padding: 8px;">Speed Range</th><th style="text-align: right; padding: 8px;">Rides</th><th style="text-align: right; padding: 8px;">%</th></tr></thead>';
+            speedTableHTML += '<tbody>';
+
+            var speedRanges = Object.keys(stats.speedBuckets).sort(function(a, b) {
+                var aStart = parseInt(a.split('-')[0]);
+                var bStart = parseInt(b.split('-')[0]);
+                return aStart - bStart;
+            });
+
+            for (var sr = 0; sr < speedRanges.length; sr++) {
+                var range = speedRanges[sr];
+                var count = stats.speedBuckets[range];
+                if (count > 0) {
+                    var percent = ((count / stats.totalRides) * 100).toFixed(1);
+                    var barWidth = percent;
+                    speedTableHTML += '<tr style="border-bottom: 1px solid #f3f4f6;">';
+                    speedTableHTML += '<td style="padding: 6px 8px; font-weight: 500;">' + range + ' mph</td>';
+                    speedTableHTML += '<td style="padding: 6px 8px; text-align: right;">' + count + '</td>';
+                    speedTableHTML += '<td style="padding: 6px 8px; text-align: right;">';
+                    speedTableHTML += '<div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">';
+                    speedTableHTML += '<div style="flex: 0 0 60px; height: 20px; background: #e5e7eb; border-radius: 3px; overflow: hidden;">';
+                    speedTableHTML += '<div style="height: 100%; background: #8b5cf6; width: ' + barWidth + '%;"></div>';
+                    speedTableHTML += '</div>';
+                    speedTableHTML += '<span style="min-width: 40px;">' + percent + '%</span>';
+                    speedTableHTML += '</div>';
+                    speedTableHTML += '</td>';
+                    speedTableHTML += '</tr>';
+                }
+            }
+
+            speedTableHTML += '</tbody></table>';
+            speedDistTableEl.innerHTML = speedTableHTML;
+
+            // Max Speed Distribution Table
+            var maxSpeedDistTableEl = document.getElementById('maxSpeedDistTable');
+            var maxSpeedTableHTML = '<table style="width: 100%; font-size: 13px;">';
+            maxSpeedTableHTML += '<thead><tr style="border-bottom: 2px solid #e5e7eb;"><th style="text-align: left; padding: 8px;">Speed Range</th><th style="text-align: right; padding: 8px;">Rides</th><th style="text-align: right; padding: 8px;">%</th></tr></thead>';
+            maxSpeedTableHTML += '<tbody>';
+
+            var maxSpeedRanges = Object.keys(stats.maxSpeedBuckets).sort(function(a, b) {
+                var aStart = parseInt(a.split('-')[0]);
+                var bStart = parseInt(b.split('-')[0]);
+                return aStart - bStart;
+            });
+
+            for (var msr = 0; msr < maxSpeedRanges.length; msr++) {
+                var range = maxSpeedRanges[msr];
+                var count = stats.maxSpeedBuckets[range];
+                if (count > 0) {
+                    var percent = ((count / stats.totalRides) * 100).toFixed(1);
+                    var barWidth = percent;
+                    maxSpeedTableHTML += '<tr style="border-bottom: 1px solid #f3f4f6;">';
+                    maxSpeedTableHTML += '<td style="padding: 6px 8px; font-weight: 500;">' + range + ' mph</td>';
+                    maxSpeedTableHTML += '<td style="padding: 6px 8px; text-align: right;">' + count + '</td>';
+                    maxSpeedTableHTML += '<td style="padding: 6px 8px; text-align: right;">';
+                    maxSpeedTableHTML += '<div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">';
+                    maxSpeedTableHTML += '<div style="flex: 0 0 60px; height: 20px; background: #e5e7eb; border-radius: 3px; overflow: hidden;">';
+                    maxSpeedTableHTML += '<div style="height: 100%; background: #ef4444; width: ' + barWidth + '%;"></div>';
+                    maxSpeedTableHTML += '</div>';
+                    maxSpeedTableHTML += '<span style="min-width: 40px;">' + percent + '%</span>';
+                    maxSpeedTableHTML += '</div>';
+                    maxSpeedTableHTML += '</td>';
+                    maxSpeedTableHTML += '</tr>';
+                }
+            }
+
+            maxSpeedTableHTML += '</tbody></table>';
+            maxSpeedDistTableEl.innerHTML = maxSpeedTableHTML;
+
+            var tbody = document.querySelector('#modelTable tbody');
+            var tableHTML = '';
+            
+            for (var n = 0; n < modelData.length; n++) {
+                var m = modelData[n];
+                var isSelected = selectedWheelModel === m.model;
+                var rowStyle = 'cursor: pointer;' + (isSelected ? ' background: #ede9fe; font-weight: 600;' : '');
+                tableHTML += '<tr onclick="selectWheelModel(\'' + m.model + '\')" style="' + rowStyle + '">';
+                tableHTML += '<td><span class="color-box" style="background: ' + colors[n % colors.length] + '"></span>' + m.model + '</td>';
+                tableHTML += '<td>' + m.count + '</td>';
+                tableHTML += '<td>' + m.distance.toFixed(1) + ' mi</td>';
+                tableHTML += '<td>' + (m.distance / m.count).toFixed(1) + ' mi</td>';
+                tableHTML += '<td>' + m.avgSpeed + ' mph</td>';
+                tableHTML += '<td>' + m.maxSpeed + ' mph</td>';
+                tableHTML += '<td>' + m.percent + '%</td>';
+                tableHTML += '</tr>';
+            }
+            
+            tbody.innerHTML = tableHTML;
+            document.getElementById('dashboard').style.display = 'block';
+        }
+        
+        function setupFilters(rides) {
+            var models = {};
+            var locations = {};
+
+            var monthNames = /(January|February|March|April|May|June|July|August|September|October|November|December)/;
+            var datePattern = /\d{4}|AM|PM|EST|EDT|CST|CDT|PST|PDT|∙/;
+            var invalidLocationCount = 0;
+
+            for (var i = 0; i < rides.length; i++) {
+                models[rides[i].model] = true;
+
+                var loc = rides[i].location;
+
+                if (!monthNames.test(loc) && !datePattern.test(loc) && loc !== 'Unknown') {
+                    var locParts = loc.split(/\s*[→>]\s*/);
+
+                    for (var p = 0; p < locParts.length; p++) {
+                        var part = locParts[p].trim();
+                        if (part && !monthNames.test(part) && !datePattern.test(part)) {
+                            if (!locations[part]) {
+                                locations[part] = 0;
+                            }
+                            locations[part]++;
+                        }
+                    }
+                } else {
+                    invalidLocationCount++;
+                }
+            }
+
+            if (invalidLocationCount > 0) {
+                console.warn('Found ' + invalidLocationCount + ' rides with invalid location data (dates/times instead of locations)');
+            }
+            
+            var modelList = Object.keys(models).sort();
+            var filterHTML = '';
+            
+            for (var j = 0; j < modelList.length; j++) {
+                var model = modelList[j];
+                selectedModels[model] = true;
+                filterHTML += '<div class="filter-option">';
+                filterHTML += '<input type="checkbox" id="model_' + j + '" checked data-model="' + model + '">';
+                filterHTML += '<label for="model_' + j + '">' + model + '</label>';
+                filterHTML += '</div>';
+            }
+            
+            document.getElementById('filterOptions').innerHTML = filterHTML;
+
+            allLocationsList = Object.entries(locations).sort(function(a, b) { return b[1] - a[1]; });
+            currentLocationPage = 0;
+
+            for (var locIdx = 0; locIdx < allLocationsList.length; locIdx++) {
+                selectedLocations[allLocationsList[locIdx][0]] = true;
+            }
+
+            renderLocationFilters();
+            document.getElementById('filters').style.display = 'block';
+            
+            var checkboxes = document.querySelectorAll('#filterOptions input[type="checkbox"]');
+            for (var n = 0; n < checkboxes.length; n++) {
+                checkboxes[n].addEventListener('change', function() {
+                    var model = this.getAttribute('data-model');
+                    selectedModels[model] = this.checked;
+                    applyFilters();
+                });
+            }
+            
+            var minDistSlider = document.getElementById('minDistance');
+            var minDistValue = document.getElementById('minDistanceValue');
+            
+            minDistSlider.addEventListener('input', function() {
+                minDistanceFilter = parseFloat(this.value);
+                minDistValue.textContent = minDistanceFilter.toFixed(1) + ' mi';
+                applyFilters();
+            });
+            
+            document.getElementById('startDate').addEventListener('change', function() {
+                startDateFilter = this.value ? new Date(this.value) : null;
+                applyFilters();
+            });
+            
+            document.getElementById('endDate').addEventListener('change', function() {
+                endDateFilter = this.value ? new Date(this.value) : null;
+                applyFilters();
+            });
+        }
+
+        function renderLocationFilters() {
+            var itemsPerPage = 5;
+            var startIdx = currentLocationPage * itemsPerPage;
+            var endIdx = Math.min(startIdx + itemsPerPage, allLocationsList.length);
+            var pageLocations = allLocationsList.slice(startIdx, endIdx);
+
+            var locationHTML = '';
+
+            if (allLocationsList.length > itemsPerPage) {
+                locationHTML += '<div style="display: flex; gap: 10px; margin-bottom: 10px;">';
+                locationHTML += '<button onclick="changeLocationPage(-1)" style="background: #667eea; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;" ' + (currentLocationPage === 0 ? 'disabled' : '') + '>← Prev</button>';
+                locationHTML += '<span style="font-size: 12px; color: #666; align-self: center;">Page ' + (currentLocationPage + 1) + ' of ' + Math.ceil(allLocationsList.length / itemsPerPage) + '</span>';
+                locationHTML += '<button onclick="changeLocationPage(1)" style="background: #667eea; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;" ' + (endIdx >= allLocationsList.length ? 'disabled' : '') + '>Next →</button>';
+                locationHTML += '</div>';
+            }
+
+            for (var k = 0; k < pageLocations.length; k++) {
+                var loc = pageLocations[k][0];
+                var count = pageLocations[k][1];
+                var isChecked = selectedLocations[loc];
+                locationHTML += '<div class="filter-option">';
+                locationHTML += '<input type="checkbox" id="loc_' + (startIdx + k) + '" ' + (isChecked ? 'checked' : '') + ' data-location="' + loc + '">';
+                locationHTML += '<label for="loc_' + (startIdx + k) + '">' + loc + ' (' + count + ')</label>';
+                locationHTML += '</div>';
+            }
+
+            document.getElementById('locationFilterOptions').innerHTML = locationHTML;
+
+            var locationCheckboxes = document.querySelectorAll('#locationFilterOptions input[type="checkbox"]');
+            for (var p = 0; p < locationCheckboxes.length; p++) {
+                locationCheckboxes[p].addEventListener('change', function() {
+                    var location = this.getAttribute('data-location');
+                    selectedLocations[location] = this.checked;
+                    applyFilters();
+                });
+            }
+        }
+
+        function changeLocationPage(delta) {
+            var itemsPerPage = 5;
+            var maxPage = Math.ceil(allLocationsList.length / itemsPerPage) - 1;
+            currentLocationPage += delta;
+            if (currentLocationPage < 0) currentLocationPage = 0;
+            if (currentLocationPage > maxPage) currentLocationPage = maxPage;
+            renderLocationFilters();
+        }
+        
+  function applyFilters() {
+            console.log('🔶 applyFilters called');
+            filteredRides = [];
+
+            console.log('🔶 Total rides:', allRides.length);
+            console.log('🔶 Selected locations:', Object.keys(selectedLocations).length, '/', allLocationsList.length);
+            console.log('🔶 Selected models:', Object.keys(selectedModels).filter(k => selectedModels[k]).length);
+            console.log('🔶 Min distance:', minDistanceFilter);
+            console.log('🔶 Date range:', startDateFilter ? startDateFilter.toDateString() : 'none', '-', endDateFilter ? endDateFilter.toDateString() : 'none');
+
+            var failedModel = 0, failedLocation = 0, failedDistance = 0, failedDate = 0;
+
+            var monthNames = /(January|February|March|April|May|June|July|August|September|October|November|December)/;
+            var datePattern = /\d{4}|AM|PM|EST|EDT|CST|CDT|PST|PDT|∙/;
+
+            for (var i = 0; i < allRides.length; i++) {
+                var ride = allRides[i];
+                var modelMatch = selectedModels[ride.model];
+                var dateMatch = true;
+
+                var locationMatch = false;
+
+                var hasInvalidLocation = monthNames.test(ride.location) || datePattern.test(ride.location) || ride.location === 'Unknown';
+
+                if (hasInvalidLocation) {
+                    locationMatch = true;
+                } else {
+                    var locParts = ride.location.split(/\s*[→>]\s*/);
+                    for (var lp = 0; lp < locParts.length; lp++) {
+                        var part = locParts[lp].trim();
+                        if (selectedLocations[part]) {
+                            locationMatch = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (Object.keys(selectedLocations).length === 0) {
+                    locationMatch = true;
+                }
+
+                if (startDateFilter && ride.date < startDateFilter) dateMatch = false;
+                if (endDateFilter && ride.date > endDateFilter) dateMatch = false;
+
+                var distanceMatch = ride.distance >= minDistanceFilter;
+
+                if (!modelMatch) failedModel++;
+                if (!locationMatch) failedLocation++;
+                if (!distanceMatch) failedDistance++;
+                if (!dateMatch) failedDate++;
+
+                if (modelMatch && locationMatch && distanceMatch && dateMatch) {
+                    filteredRides.push(ride);
+                }
+            }
+            console.log('🔶 Filtered rides:', filteredRides.length);
+            console.log('🔶 Filter failures - Model:', failedModel, 'Location:', failedLocation, 'Distance:', failedDistance, 'Date:', failedDate);
+
+            var stats = analyzeData(filteredRides);
+            updateDashboard(stats);
+            console.log('🔶 Calling renderCalendar with', filteredRides.length, 'rides');
+            renderCalendar(filteredRides);
+        }
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded, setting up event listeners');
+
+            document.getElementById('extractorLink').addEventListener('click', function(e) {
+                e.preventDefault();
+                showExtractorModal();
+            });
+            
+            var fileInput = document.getElementById('fileInput');
+            console.log('fileInput element:', fileInput);
+            
+            if (!fileInput) {
+                console.error('Cannot find fileInput element!');
+                return;
+            }
+            
+            fileInput.addEventListener('change', function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+
+                console.log('File selected:', file.name);
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('loading').textContent = 'Reading file...';
+                
+                var reader = new FileReader();
+                
+                reader.onerror = function() {
+                    console.error('File reading error');
+                    document.getElementById('loading').textContent = 'Error reading file!';
+                };
+                
+                reader.onload = function(event) {
+                    processFile(event.target.result);
+                };
+                
+                reader.readAsText(file);
+            });
+        });
+        
+        function renderCalendar(filteredRides) {
+            console.log('🟢 renderCalendar START');
+            var cal = document.getElementById('calendar');
+            var zoom = calendarZoom;
+
+            console.log('🟢 Zoom:', zoom, 'Month:', calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+            console.log('🟢 FilteredRides:', filteredRides ? filteredRides.length : 'null');
+
+            if (zoom === 1) {
+                renderMonthCalendar(filteredRides);
+            } else {
+                renderMultiMonthCalendar(zoom, filteredRides);
+            }
+        }
+        
+        function renderMonthCalendar(filteredRides) {
+            var cal = document.getElementById('calendar');
+            if (!cal) {
+                console.error('Calendar element not found!');
+                return;
+            }
+
+            var year = calendarMonth.getFullYear();
+            var month = calendarMonth.getMonth();
+
+            console.log('renderMonthCalendar for', year, month);
+            console.log('- Filtered rides:', filteredRides ? filteredRides.length : 0);
+
+            document.getElementById('calendarMonth').textContent =
+                calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+            var firstDay = new Date(year, month, 1).getDay();
+            var daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            var ridesByDate = {};
+            for (var i = 0; i < allRides.length; i++) {
+                var r = allRides[i];
+                if (r.date.getFullYear() === year && r.date.getMonth() === month) {
+                    var day = r.date.getDate();
+                    if (!ridesByDate[day]) ridesByDate[day] = [];
+                    ridesByDate[day].push(r);
+                }
+            }
+
+            var filteredRidesByDay = {};
+            var ridesToCheck = filteredRides || allRides;
+            for (var i = 0; i < ridesToCheck.length; i++) {
+                var r = ridesToCheck[i];
+                if (r.date.getFullYear() === year && r.date.getMonth() === month) {
+                    filteredRidesByDay[r.date.getDate()] = true;
+                }
+            }
+
+            var html = '<div class="calendar-grid">';
+            var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            for (var d = 0; d < 7; d++) {
+                html += '<div class="calendar-header">' + days[d] + '</div>';
+            }
+
+            for (var e = 0; e < firstDay; e++) {
+                html += '<div class="calendar-day day-empty"></div>';
+            }
+
+            for (var day = 1; day <= daysInMonth; day++) {
+                var hasRides = ridesByDate[day] && ridesByDate[day].length > 0;
+                var hasFilteredRides = filteredRidesByDay[day];
+
+                var className = 'calendar-day ';
+                var title = '';
+                var boxShadow = '';
+
+                // Check if this day has rides with the selected wheel model
+                var hasSelectedWheelRides = false;
+                if (selectedWheelModel && hasRides && ridesByDate[day]) {
+                    for (var r = 0; r < ridesByDate[day].length; r++) {
+                        if (ridesByDate[day][r].model === selectedWheelModel) {
+                            hasSelectedWheelRides = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check if this day has rides in the selected time of day
+                var hasSelectedTimeRides = false;
+                if (selectedTimeOfDay && hasRides && ridesByDate[day]) {
+                    for (var r = 0; r < ridesByDate[day].length; r++) {
+                        if (getRideTimeOfDay(ridesByDate[day][r]) === selectedTimeOfDay) {
+                            hasSelectedTimeRides = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (hasRides) {
+                    className += 'day-rode';
+                    title = ridesByDate[day].length + ' ride(s)';
+                } else {
+                    className += 'day-no-ride';
+                    title = 'No ride';
+                }
+
+                // Apply border styling based on selection
+                if (hasSelectedWheelRides && hasSelectedTimeRides) {
+                    // Both selected - show dual border (purple inner, red outer)
+                    boxShadow = ' style="box-shadow: 0 0 0 4px #8b5cf6 inset, 0 0 0 8px #ef4444 inset;"';
+                } else if (hasSelectedWheelRides) {
+                    // Wheel only - purple border
+                    boxShadow = ' style="box-shadow: 0 0 0 4px #8b5cf6 inset;"';
+                } else if (hasSelectedTimeRides) {
+                    // Time of day only - red border
+                    boxShadow = ' style="box-shadow: 0 0 0 4px #ef4444 inset;"';
+                }
+
+                var dayContent = day;
+                if (hasRides) {
+                    var totalMiles = 0;
+                    var uniqueModels = {};
+                    for (var j = 0; j < ridesByDate[day].length; j++) {
+                        totalMiles += ridesByDate[day][j].distance;
+                        uniqueModels[ridesByDate[day][j].model] = true;
+                    }
+                    var modelKeys = Object.keys(uniqueModels);
+                    var wheelInfo = '';
+                    if (ridesByDate[day].length === 1) {
+                        wheelInfo = '<div style="position: absolute; top: 2px; right: 2px; font-size: 11px; font-weight: 600;">' + modelKeys[0].substring(0, 3).toUpperCase() + '</div>';
+                    } else {
+                        wheelInfo = '<div style="position: absolute; top: 2px; right: 2px; font-size: 11px; font-weight: 600;">' + ridesByDate[day].length + 'x</div>';
+                    }
+                    dayContent = '<div style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">' +
+                                 '<div style="font-size: 18px; font-weight: 600; line-height: 1;">' + day + '</div>' +
+                                 '<div style="font-size: 14px; margin-top: 4px; line-height: 1;">' + totalMiles.toFixed(1) + 'mi</div>' +
+                                 wheelInfo + '</div>';
+                }
+
+                html += '<div class="' + className + '" title="' + title + '" onclick="showRideDetails(' + year + ',' + month + ',' + day + ')"' + boxShadow + '>' + dayContent + '</div>';
+            }
+
+            html += '</div>';
+            cal.innerHTML = html;
+            console.log('✅ Calendar rendered');
+            console.log('✅ Calendar HTML length:', html.length, 'characters');
+        }
+
+        function renderMultiMonthCalendar(months, filteredRides) {
+            var cal = document.getElementById('calendar');
+            var startMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+
+            var endMonth = new Date(startMonth);
+            endMonth.setMonth(endMonth.getMonth() + months - 1);
+
+            document.getElementById('calendarMonth').textContent =
+                startMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) +
+                ' - ' +
+                endMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+            var filteredRidesByDate = {};
+            var ridesToCheck = filteredRides || allRides;
+            for (var i = 0; i < ridesToCheck.length; i++) {
+                var r = ridesToCheck[i];
+                var key = r.date.getFullYear() + '-' + r.date.getMonth() + '-' + r.date.getDate();
+                filteredRidesByDate[key] = true;
+            }
+
+            var html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">';
+
+            for (var m = 0; m < months; m++) {
+                var currentDate = new Date(startMonth);
+                currentDate.setMonth(currentDate.getMonth() + m);
+                var year = currentDate.getFullYear();
+                var month = currentDate.getMonth();
+
+                html += '<div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">';
+                html += '<h4 style="text-align: center; margin: 0 0 10px 0; font-size: 14px;">' +
+                        currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + '</h4>';
+
+                var firstDay = new Date(year, month, 1).getDay();
+                var daysInMonth = new Date(year, month + 1, 0).getDate();
+
+                var ridesByDate = {};
+                for (var i = 0; i < allRides.length; i++) {
+                    var r = allRides[i];
+                    if (r.date.getFullYear() === year && r.date.getMonth() === month) {
+                        var day = r.date.getDate();
+                        if (!ridesByDate[day]) ridesByDate[day] = [];
+                        ridesByDate[day].push(r);
+                    }
+                }
+
+                html += '<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;">';
+
+                var days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+                for (var d = 0; d < 7; d++) {
+                    html += '<div style="text-align: center; font-size: 10px; font-weight: 600; color: #666; padding: 4px;">' + days[d] + '</div>';
+                }
+
+                for (var e = 0; e < firstDay; e++) {
+                    html += '<div style="aspect-ratio: 1; background: #fafafa;"></div>';
+                }
+
+                for (var day = 1; day <= daysInMonth; day++) {
+                    var filteredKey = year + '-' + month + '-' + day;
+                    var hasRides = ridesByDate[day] && ridesByDate[day].length > 0;
+                    var hasFilteredRides = filteredRidesByDate[filteredKey];
+
+                    var bgColor = '#fff';
+                    var textColor = '#333';
+                    var boxShadow = '';
+
+                    // Check if this day has rides with the selected wheel model
+                    var hasSelectedWheelRides = false;
+                    if (selectedWheelModel && hasRides && ridesByDate[day]) {
+                        for (var r = 0; r < ridesByDate[day].length; r++) {
+                            if (ridesByDate[day][r].model === selectedWheelModel) {
+                                hasSelectedWheelRides = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Check if this day has rides in the selected time of day
+                    var hasSelectedTimeRides = false;
+                    if (selectedTimeOfDay && hasRides && ridesByDate[day]) {
+                        for (var r = 0; r < ridesByDate[day].length; r++) {
+                            if (getRideTimeOfDay(ridesByDate[day][r]) === selectedTimeOfDay) {
+                                hasSelectedTimeRides = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (hasRides) {
+                        bgColor = '#10b981';
+                        textColor = '#fff';
+                    }
+
+                    // Apply border styling based on selection
+                    if (hasSelectedWheelRides && hasSelectedTimeRides) {
+                        // Both selected - show dual border (purple inner, red outer)
+                        boxShadow = ' box-shadow: 0 0 0 4px #8b5cf6 inset, 0 0 0 8px #ef4444 inset;';
+                    } else if (hasSelectedWheelRides) {
+                        // Wheel only - purple border
+                        boxShadow = ' box-shadow: 0 0 0 4px #8b5cf6 inset;';
+                    } else if (hasSelectedTimeRides) {
+                        // Time of day only - red border
+                        boxShadow = ' box-shadow: 0 0 0 4px #ef4444 inset;';
+                    }
+
+                    var dayContent = day;
+                    if (hasRides && months <= 6) {
+                        var totalMiles = 0;
+                        var uniqueModels = {};
+                        for (var j = 0; j < ridesByDate[day].length; j++) {
+                            totalMiles += ridesByDate[day][j].distance;
+                            uniqueModels[ridesByDate[day][j].model] = true;
+                        }
+                        var modelKeys = Object.keys(uniqueModels);
+                        var wheelInfo = '';
+                        var daySize = months === 3 ? '12px' : '9px';
+                        var mileSize = months === 3 ? '10px' : '7px';
+                        var cornerSize = months === 3 ? '8px' : '6px';
+
+                        if (ridesByDate[day].length === 1) {
+                            wheelInfo = '<div style="position: absolute; top: 1px; right: 1px; font-size: ' + cornerSize + '; font-weight: 600;">' + modelKeys[0].substring(0, 3).toUpperCase() + '</div>';
+                        } else {
+                            wheelInfo = '<div style="position: absolute; top: 1px; right: 1px; font-size: ' + cornerSize + '; font-weight: 600;">' + ridesByDate[day].length + 'x</div>';
+                        }
+                        dayContent = '<div style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;"><div style="font-size: ' + daySize + '; font-weight: 600;">' + day + '</div><div style="font-size: ' + mileSize + '; margin-top: 1px;">' + totalMiles.toFixed(1) + 'mi</div>' + wheelInfo + '</div>';
+                    }
+
+                    html += '<div onclick="showRideDetails(' + year + ',' + month + ',' + day + ')" style="aspect-ratio: 1; background: ' + bgColor + '; color: ' + textColor + '; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; border-radius: 2px; font-weight: ' + (hasRides ? '600' : '400') + ';' + boxShadow + '">' + dayContent + '</div>';
+                }
+                
+                html += '</div></div>';
+            }
+            
+            html += '</div>';
+            cal.innerHTML = html;
+        }
+        
+        function showRideDetails(year, month, day) {
+            var rides = [];
+            for (var i = 0; i < allRides.length; i++) {
+                var r = allRides[i];
+                if (r.date.getFullYear() === year && r.date.getMonth() === month && r.date.getDate() === day) {
+                    rides.push(r);
+                }
+            }
+
+            if (rides.length === 0) {
+                return;
+            }
+
+            var dateObj = new Date(year, month, day);
+            document.getElementById('rideDetailsDate').textContent = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+            var html = '<div style="display: grid; gap: 10px;">';
+            for (var j = 0; j < rides.length; j++) {
+                var ride = rides[j];
+
+                html += '<div style="padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #667eea;">';
+                html += '<div style="font-weight: 600; margin-bottom: 4px;">' + ride.model + '</div>';
+                html += '<div style="font-size: 14px; color: #666;">';
+                html += ride.distance.toFixed(1) + ' mi • Avg: ' + ride.avgSpeed + ' mph • Max: ' + ride.maxSpeed + ' mph';
+                html += '</div>';
+                html += '<div style="font-size: 12px; color: #999; margin-top: 4px;">' + ride.location + '</div>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            document.getElementById('rideDetailsList').innerHTML = html;
+            document.getElementById('rideDetails').style.display = 'block';
+        }
+        
+        function closeRideDetails() {
+            document.getElementById('rideDetails').style.display = 'none';
+        }
+        
+        function changeCalendarMonth(delta) {
+            console.log('🔵 changeCalendarMonth called with delta:', delta);
+            var zoom = calendarZoom;
+            var oldMonth = calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + (delta * zoom), 1);
+            var newMonth = calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            console.log('🔵 Changed from', oldMonth, 'to', newMonth, '(zoom:', zoom + ')');
+            applyFilters();
+        }
+
+        function changeCalendarZoom() {
+            console.log('🔵 changeCalendarZoom called');
+            var oldZoom = calendarZoom;
+            calendarZoom = parseInt(document.getElementById('calendarZoom').value);
+            console.log('🔵 Zoom changed from', oldZoom, 'to', calendarZoom);
+            applyFilters();
+        }
+        
+        function clearDateRange() {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            startDateFilter = null;
+            endDateFilter = null;
+            applyFilters();
+        }
+        
+        function showExtractorModal() {
+            var modal = document.createElement('div');
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px;';
+            
+            var content = document.createElement('div');
+            content.style.cssText = 'background: white; border-radius: 16px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 40px; position: relative;';
+            
+            content.innerHTML = `
+                <button onclick="this.closest('[style*=fixed]').remove()" style="position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">✕</button>
+                <h2 style="margin-bottom: 10px; color: #333;">📥 Get Data from EUCWorld</h2>
+                <p style="color: #666; margin-bottom: 30px;">Follow these steps to extract your ride data</p>
+                
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin-bottom: 30px;">
+                    <strong style="color: #92400e; display: block; margin-bottom: 5px;">⚠️ Important</strong>
+                    <p style="color: #78350f; font-size: 14px; margin: 0;">This script only works on euc.world. You must be logged in and on the Tours page.</p>
+                </div>
+                
+                <div style="background: #f8f9fa; border-radius: 8px; padding: 30px; margin-bottom: 30px;">
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start;">
+                        <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">1</div>
+                        <div>
+                            <h3 style="margin: 0 0 5px 0; font-size: 16px;">Log into EUC World</h3>
+                            <p style="margin: 0; color: #666; font-size: 14px;">Go to <a href="https://euc.world" target="_blank" style="color: #667eea;">euc.world</a> and log in</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start;">
+                        <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">2</div>
+                        <div>
+                            <h3 style="margin: 0 0 5px 0; font-size: 16px;">Navigate to Tours</h3>
+                            <p style="margin: 0; color: #666; font-size: 14px;">Click on the "Tours" tab</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start;">
+                        <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">3</div>
+                        <div>
+                            <h3 style="margin: 0 0 5px 0; font-size: 16px;">Open Console</h3>
+                            <p style="margin: 0; color: #666; font-size: 14px;">Press F12 or right-click → Inspect → Console</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start;">
+                        <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">4</div>
+                        <div>
+                            <h3 style="margin: 0 0 5px 0; font-size: 16px;">Copy & Run Script</h3>
+                            <p style="margin: 0; color: #666; font-size: 14px;">Click button below, paste in console, press Enter</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 15px; align-items: flex-start;">
+                        <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">5</div>
+                        <div>
+                            <h3 style="margin: 0 0 5px 0; font-size: 16px;">Upload File</h3>
+                            <p style="margin: 0; color: #666; font-size: 14px;">File downloads as "EUCWorldStats.txt" - upload it here!</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="modalSuccess" style="background: #10b981; color: white; padding: 12px 20px; border-radius: 6px; margin-bottom: 20px; display: none;">
+                    ✅ Script copied to clipboard! Paste it in the EUCWorld console.
+                </div>
+                
+                <button onclick="copyExtractorScript()" style="background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%;">
+                    📋 Copy Script to Clipboard
+                </button>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
+            document.getElementById('modalFileInput').addEventListener('change', function(e) {
+                var file = e.target.files[0];
+                if (file) {
+                    modal.remove();
+                    var reader = new FileReader();
+                    reader.onload = function(event) {
+                        processFile(event.target.result);
+                    };
+                    reader.readAsText(file);
+                }
+            });
+        }
+        
+        function toggleMonthSelection(month, monthData) {
+            var index = selectedMonths.indexOf(month);
+            
+            if (index >= 0) {
+                selectedMonths.splice(index, 1);
+            } else {
+                if (selectedMonths.length >= 2) {
+                    selectedMonths.shift();
+                }
+                selectedMonths.push(month);
+            }
+            
+            updateComparison();
+            applyFilters();
+        }
+        
+        function updateComparison() {
+            var box = document.getElementById('comparisonBox');
+            var content = document.getElementById('comparisonContent');
+            
+            if (selectedMonths.length === 0) {
+                box.style.display = 'none';
+                return;
+            }
+            
+            box.style.display = 'block';
+            
+            if (selectedMonths.length === 1) {
+                var month = selectedMonths[0];
+                var data = comparisonData[month];
+                content.innerHTML = '<div style="font-size: 14px;"><strong>' + month + '</strong><br>' +
+                    'Distance: ' + data.distance.toFixed(1) + ' mi<br>' +
+                    'Rides: ' + data.rides + '</div>';
+            } else if (selectedMonths.length === 2) {
+                var month1 = selectedMonths[0];
+                var month2 = selectedMonths[1];
+                var data1 = comparisonData[month1];
+                var data2 = comparisonData[month2];
+                
+                var distDiff = data2.distance - data1.distance;
+                var ridesDiff = data2.rides - data1.rides;
+                var distPercent = data1.distance > 0 ? ((distDiff / data1.distance) * 100) : 0;
+                var ridesPercent = data1.rides > 0 ? ((ridesDiff / data1.rides) * 100) : 0;
+                
+                content.innerHTML = '<div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; font-size: 14px;">' +
+                    '<div><strong>' + month1 + '</strong><br>Distance: ' + data1.distance.toFixed(1) + ' mi<br>Rides: ' + data1.rides + '</div>' +
+                    '<div style="align-self: center; color: #666;">→</div>' +
+                    '<div><strong>' + month2 + '</strong><br>Distance: ' + data2.distance.toFixed(1) + ' mi<br>Rides: ' + data2.rides + '</div>' +
+                    '</div>' +
+                    '<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #3b82f6; font-size: 13px;">' +
+                    '<strong>Change:</strong> ' +
+                    (distDiff >= 0 ? '+' : '') + distDiff.toFixed(1) + ' mi (' + (distPercent >= 0 ? '+' : '') + distPercent.toFixed(1) + '%) | ' +
+                    (ridesDiff >= 0 ? '+' : '') + ridesDiff + ' rides (' + (ridesPercent >= 0 ? '+' : '') + ridesPercent.toFixed(1) + '%)</div>';
+            }
+        }
+        
+        function clearComparison() {
+            selectedMonths = [];
+            updateComparison();
+            applyFilters();
+        }
+        
+        function processFile(content) {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').textContent = 'Parsing data...';
+            
+            setTimeout(function() {
+                try {
+                    allRides = parseEUCData(content);
+                    console.log('Rides parsed:', allRides.length);
+
+                    document.getElementById('loading').textContent = 'Setting up filters...';
+                    setupFilters(allRides);
+
+                    document.getElementById('loading').textContent = 'Analyzing data...';
+                    var stats = analyzeData(allRides);
+                    comparisonData = stats.monthlyStats;
+                    console.log('Stats calculated');
+
+                    document.getElementById('loading').textContent = 'Updating dashboard...';
+                    updateDashboard(stats);
+                    renderCalendar(allRides);
+
+                    // Sync calendar zoom dropdown with current zoom value
+                    document.getElementById('calendarZoom').value = calendarZoom;
+
+                    document.getElementById('loading').style.display = 'none';
+                    console.log('Dashboard updated successfully');
+                } catch (error) {
+                    console.error('Error:', error);
+                    document.getElementById('loading').textContent = 'Error: ' + error.message;
+                }
+            }, 100);
+        }
+
+        function copyExtractorScript() {
+            var script = `(async function() {
+    console.log('🚀 Starting EUCWorld data extraction...');
+
+    if (typeof toursApp === 'undefined') {
+        console.error('❌ toursApp not found. Make sure you are on the Tours page!');
+        alert('❌ Error: Not on the Tours page! Navigate to the Tours page and try again.');
+        return;
+    }
+
+    toursApp.count = 10000;
+    console.log('📊 Loading all rides (this may take a few seconds)...');
+    toursApp.getList();
+
+    async function waitForTable(maxAttempts = 40) {
+        let previousCount = 0;
+        let stableCount = 0;
+
+        for (let i = 0; i < maxAttempts; i++) {
+            let rows = document.querySelectorAll("table tr");
+            let dataRows = Array.from(rows).filter(row => {
+                let cells = row.querySelectorAll("td");
+                return cells.length > 0 && cells[0]?.innerText?.trim().length > 10;
+            });
+
+            let currentCount = dataRows.length;
+
+            console.log(\`⏳ Waiting for data... (attempt \${i + 1}/\${maxAttempts}), found \${currentCount} rides\`);
+
+            // If count hasn't changed for 3 consecutive checks, consider it stable
+            if (currentCount === previousCount && currentCount > 10) {
+                stableCount++;
+                if (stableCount >= 3) {
+                    console.log(\`✓ Table stabilized with \${currentCount} rides\`);
+                    return true;
+                }
+            } else {
+                stableCount = 0;
+            }
+
+            previousCount = currentCount;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        return false;
+    }
+
+    const tableReady = await waitForTable();
+    if (!tableReady) {
+        console.error('❌ Timeout: Table did not load. Try running the script again.');
+        alert('❌ Data did not load in time. Please try again!');
+        return;
+    }
+
+    let allRides = [];
+    let rows = document.querySelectorAll("table tr");
+    console.log(\`📋 Processing \${rows.length} rows...\`);
+
+    rows.forEach((row) => {
+        let cells = row.querySelectorAll("td");
+        if (cells.length > 0) {
+            let mainCell = cells[0];
+            if (mainCell) {
+                let text = mainCell.innerText.trim();
+                text = text.replace(/\\s*MENU\\s*$/g, '');
+                if (text && text.length > 10) {
+                    allRides.push(text);
+                }
+            }
+        }
+    });
+
+    if (allRides.length === 0) {
+        console.error('❌ No ride data found! Make sure you have rides in your account.');
+        alert('❌ No rides found! Make sure you have ride data in your EUCWorld account.');
+        return;
+    }
+
+    let output = allRides.join('|||');
+    console.log('✅ Extraction complete!');
+    console.log(\`📊 Total rides extracted: \${allRides.length}\`);
+    console.log(\`📦 Data size: \${(output.length / 1024).toFixed(1)} KB\`);
+
+    if (allRides.length > 0) {
+        console.log('\\n📦 Preview of first ride:');
+        console.log(allRides[0]);
+    }
+
+    try {
+        await navigator.clipboard.writeText(output);
+        console.log('\\n✅ ✅ ✅ SUCCESS! Data copied to clipboard! ✅ ✅ ✅');
+        console.log('👉 Now paste into a text file and save as "EUCWorldStats.txt"');
+        alert('✅ SUCCESS! ' + allRides.length + ' rides copied to clipboard!\\n\\nNow paste into a text file and save as "EUCWorldStats.txt"');
+    } catch (err) {
+        console.log('\\n📥 Creating downloadable file...');
+        const blob = new Blob([output], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'EUCWorldStats.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log('✅ ✅ ✅ File downloaded as "EUCWorldStats.txt"! ✅ ✅ ✅');
+        console.log('👉 Check your Downloads folder');
+        alert('✅ SUCCESS! ' + allRides.length + ' rides downloaded!\\n\\nCheck your Downloads folder for "EUCWorldStats.txt"');
+    }
+
+    console.log('\\n🎉 All done! You can now upload the file to your dashboard.');
+})();`;
+            
+            navigator.clipboard.writeText(script).then(function() {
+                document.getElementById('modalSuccess').style.display = 'block';
+                setTimeout(function() {
+                    document.getElementById('modalSuccess').style.display = 'none';
+                }, 3000);
+            }).catch(function() {
+                alert('Could not copy. Please allow clipboard access or copy manually from console.');
+            });
+        }
+    </script>
+</body>
+</html>
