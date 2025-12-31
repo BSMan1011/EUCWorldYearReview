@@ -198,9 +198,12 @@
 </head>
 <body>
     <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 10px;">
             <h1 style="margin: 0;">EUC Ride Statistics Dashboard</h1>
-            <a href="#" id="extractorLink" style="background: #10b981; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">📥 Get Data from EUCWorld</a>
+            <div style="display: flex; gap: 10px;">
+                <button id="unitToggle" onclick="toggleUnits()" style="background: #8b5cf6; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: none;">Show in km</button>
+                <a href="#" id="extractorLink" style="background: #10b981; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">📥 Get Data from EUCWorld</a>
+            </div>
         </div>
         
         <div class="file-upload">
@@ -466,6 +469,8 @@
         var selectedWheelModel = null;
         var filteredRides = null;
         var selectedTimeOfDay = null;
+        var dataUnit = 'mi'; // Will be auto-detected from data (mi or km)
+        var displayUnit = 'mi'; // User preference for display
 
         function selectWheelModel(modelName) {
             if (selectedWheelModel === modelName) {
@@ -497,6 +502,34 @@
             return 'Night (9pm-5am)';
         }
 
+        function convertDistance(value, from, to) {
+            if (from === to) return value;
+            if (from === 'mi' && to === 'km') return value * 1.60934;
+            if (from === 'km' && to === 'mi') return value / 1.60934;
+            return value;
+        }
+
+        function convertSpeed(value, from, to) {
+            return convertDistance(value, from, to); // Same conversion factor
+        }
+
+        function formatDistance(value) {
+            var converted = convertDistance(value, dataUnit, displayUnit);
+            return converted.toFixed(1) + ' ' + displayUnit;
+        }
+
+        function formatSpeed(value) {
+            var converted = convertSpeed(value, dataUnit, displayUnit);
+            return Math.round(converted) + ' ' + (displayUnit === 'mi' ? 'mph' : 'km/h');
+        }
+
+        function toggleUnits() {
+            displayUnit = displayUnit === 'mi' ? 'km' : 'mi';
+            console.log('Toggled display unit to:', displayUnit);
+            document.getElementById('unitToggle').textContent = 'Show in ' + (displayUnit === 'mi' ? 'km' : 'mi');
+            applyFilters();
+        }
+
         function parseEUCData(text) {
             var rides = [];
             var entries = text.split('|||');
@@ -513,22 +546,39 @@
                 
                 var dateMatch = entry.match(/(January|February|March|April|May|June|July|August|September|October|November|December) \d+, \d{4}/);
                 var timeMatch = entry.match(/(January|February|March|April|May|June|July|August|September|October|November|December) \d+, \d{4}\s+(\d+):(\d+)\s*(AM|PM)/);
-                var avgMatch = entry.match(/(\d+) mphAVG/);
-                var maxMatch = entry.match(/(\d+) mphMAX/);
-                var distMatch = entry.match(/([\d.]+) mi/);
+
+                // Detect unit from data (mi or km)
+                var avgMatch = entry.match(/(\d+)\s*(mph|km\/h|kph)\s*AVG/i);
+                var maxMatch = entry.match(/(\d+)\s*(mph|km\/h|kph)\s*MAX/i);
+                var distMatch = entry.match(/([\d.]+)\s*(mi|km)(?:\s|$|•|,)/i);
 
                 if (!dateMatch || !distMatch) continue;
+
+                // Auto-detect unit from first ride
+                if (i === 0 && distMatch[2]) {
+                    dataUnit = distMatch[2].toLowerCase() === 'km' ? 'km' : 'mi';
+                    displayUnit = dataUnit; // Default display unit to data unit
+                    console.log('🔍 Detected data unit:', dataUnit);
+                    console.log('🔍 First ride distance:', distMatch[1], distMatch[2]);
+                    console.log('🔍 First ride avg speed:', avgMatch ? avgMatch[1] + ' ' + avgMatch[2] : 'not found');
+                    console.log('🔍 First ride max speed:', maxMatch ? maxMatch[1] + ' ' + maxMatch[2] : 'not found');
+                }
 
                 var model = 'Unknown';
 
                 for (var j = 0; j < lines.length; j++) {
                     var line = lines[j];
 
-                    var bulletMatch = line.match(/([A-Za-z][A-Za-z0-9\s]+?)[\s\u2022\u00B7•∙·]\s*(\d+\.?\d*)\s*mi/);
+                    // Match wheel model: text before bullet/dot and distance, but not speed data
+                    var bulletMatch = line.match(/^([A-Za-z][A-Za-z0-9\s]+?)[\s\u2022\u00B7•∙·]\s*(\d+\.?\d*)\s*(mi|km)(?:\s|$|•|,)/i);
                     if (bulletMatch && bulletMatch[1]) {
                         var potentialModel = bulletMatch[1].trim();
-                        if (potentialModel.length > 3 && isNaN(parseFloat(potentialModel))) {
+                        // Ensure it's not speed data (AVG, MAX, mph, km/h, etc.)
+                        if (potentialModel.length > 3 &&
+                            isNaN(parseFloat(potentialModel)) &&
+                            !potentialModel.match(/\b(AVG|MAX|mph|km\/h|kph|h\s*AVG|h\s*MAX)\b/i)) {
                             model = potentialModel;
+                            if (i < 3) console.log('🔍 Ride', i, 'matched model:', model, 'from line:', line);
                             break;
                         }
                     }
@@ -584,6 +634,7 @@
                 totalDistance += rides[i].distance;
                 totalSpeed += rides[i].avgSpeed;
                 totalMaxSpeed += rides[i].maxSpeed;
+                if (i < 3) console.log('🔍 Ride', i, 'distance:', rides[i].distance, 'model:', rides[i].model);
                 if (rides[i].maxSpeed > maxSpeed) {
                     maxSpeed = rides[i].maxSpeed;
                 }
@@ -591,6 +642,9 @@
                     longestRide = rides[i].distance;
                 }
             }
+
+            console.log('🔍 Total distance (raw):', totalDistance, dataUnit);
+            console.log('🔍 Will display as:', convertDistance(totalDistance, dataUnit, displayUnit).toFixed(1), displayUnit);
 
             var totalRides = rides.length;
             var avgDistance = totalDistance / totalRides;
@@ -922,12 +976,12 @@
         function updateDashboard(stats) {
             comparisonData = stats.monthlyStats;
 
-            document.getElementById('totalDistance').textContent = stats.totalDistance + ' mi';
+            document.getElementById('totalDistance').textContent = formatDistance(parseFloat(stats.totalDistance));
             document.getElementById('totalRides').textContent = stats.totalRides;
-            document.getElementById('avgDistance').textContent = stats.avgDistance + ' mi';
-            document.getElementById('avgSpeed').textContent = stats.avgSpeed + ' mph';
-            document.getElementById('maxSpeedEver').textContent = stats.maxSpeed + ' mph';
-            document.getElementById('avgMaxSpeed').textContent = stats.avgMaxSpeed + ' mph';
+            document.getElementById('avgDistance').textContent = formatDistance(parseFloat(stats.avgDistance));
+            document.getElementById('avgSpeed').textContent = formatSpeed(parseFloat(stats.avgSpeed));
+            document.getElementById('maxSpeedEver').textContent = formatSpeed(stats.maxSpeed);
+            document.getElementById('avgMaxSpeed').textContent = formatSpeed(parseFloat(stats.avgMaxSpeed));
             document.getElementById('days2024').textContent = stats.days2024;
             document.getElementById('days2024percent').textContent = (stats.days2024 / 366 * 100).toFixed(1) + '% of year';
             document.getElementById('days2025').textContent = stats.days2025;
@@ -937,7 +991,7 @@
             var daysPassed = Math.ceil((today - startOfYear) / (1000 * 60 * 60 * 24));
             document.getElementById('days2025percent').textContent = (stats.days2025 / daysPassed * 100).toFixed(1) + '% of days so far';
             document.getElementById('avgDaysYear').textContent = stats.avgDaysYear;
-            document.getElementById('longestRide').textContent = stats.longestRide + ' mi';
+            document.getElementById('longestRide').textContent = formatDistance(parseFloat(stats.longestRide));
             document.getElementById('totalTime').textContent = stats.totalTime + ' hrs';
             document.getElementById('ridesFiltered').textContent = stats.totalFilteredOut;
             document.getElementById('ridesFilteredPercent').textContent = 'of ' + allRides.length + ' total';
@@ -968,14 +1022,14 @@
             var ridesColor = ridesDiff > 0 ? '#10b981' : (ridesDiff < 0 ? '#ef4444' : '#6b7280');
 
             document.getElementById('thisWeek').textContent = stats.thisWeekRides + ' rides';
-            document.getElementById('thisWeekDetail').innerHTML = stats.thisWeekDistance.toFixed(1) + ' mi <span style="color: ' + ridesColor + ';">' + ridesArrow + Math.abs(ridesDiff) + ' rides</span>';
+            document.getElementById('thisWeekDetail').innerHTML = formatDistance(stats.thisWeekDistance) + ' <span style="color: ' + ridesColor + ';">' + ridesArrow + Math.abs(ridesDiff) + ' rides</span>';
 
             document.getElementById('lastWeek').textContent = stats.lastWeekRides + ' rides';
-            document.getElementById('lastWeekDetail').textContent = stats.lastWeekDistance.toFixed(1) + ' mi';
+            document.getElementById('lastWeekDetail').textContent = formatDistance(stats.lastWeekDistance);
 
             // Update monthly personal bests
             if (stats.monthBestDistanceRide) {
-                document.getElementById('monthBestDistance').textContent = stats.monthBestDistance.toFixed(1) + ' mi';
+                document.getElementById('monthBestDistance').textContent = formatDistance(stats.monthBestDistance);
                 var distDate = stats.monthBestDistanceRide.date;
                 document.getElementById('monthBestDistanceDate').textContent = (distDate.getMonth() + 1) + '/' + distDate.getDate() + ' - ' + stats.monthBestDistanceRide.model;
             } else {
@@ -984,16 +1038,16 @@
             }
 
             if (stats.monthBestSpeedRide) {
-                document.getElementById('monthBestSpeed').textContent = stats.monthBestSpeed + ' mph';
+                document.getElementById('monthBestSpeed').textContent = formatSpeed(stats.monthBestSpeed);
                 var speedDate = stats.monthBestSpeedRide.date;
-                document.getElementById('monthBestSpeedDate').textContent = (speedDate.getMonth() + 1) + '/' + speedDate.getDate() + ' - ' + stats.monthBestSpeedRide.distance.toFixed(1) + ' mi ride';
+                document.getElementById('monthBestSpeedDate').textContent = (speedDate.getMonth() + 1) + '/' + speedDate.getDate() + ' - ' + formatDistance(stats.monthBestSpeedRide.distance) + ' ride';
             } else {
                 document.getElementById('monthBestSpeed').textContent = '-';
                 document.getElementById('monthBestSpeedDate').textContent = 'No rides this month';
             }
 
             if (stats.monthBestDayDistanceDate) {
-                document.getElementById('monthBestDayDistance').textContent = stats.monthBestDayDistance.toFixed(1) + ' mi';
+                document.getElementById('monthBestDayDistance').textContent = formatDistance(stats.monthBestDayDistance);
                 document.getElementById('monthBestDayDistanceDate').textContent = (stats.monthBestDayDistanceDate.getMonth() + 1) + '/' + stats.monthBestDayDistanceDate.getDate();
             } else {
                 document.getElementById('monthBestDayDistance').textContent = '-';
@@ -1026,7 +1080,8 @@
             
             for (var m = 0; m < monthKeys.length; m++) {
                 monthLabels.push(monthKeys[m]);
-                monthDistances.push(stats.monthlyStats[monthKeys[m]].distance.toFixed(1));
+                var distValue = convertDistance(stats.monthlyStats[monthKeys[m]].distance, dataUnit, displayUnit);
+                monthDistances.push(distValue.toFixed(1));
                 monthRides.push(stats.monthlyStats[monthKeys[m]].rides);
             }
 
@@ -1045,7 +1100,7 @@
                 data: {
                     labels: monthLabels,
                     datasets: [{
-                        label: 'Distance (mi)',
+                        label: 'Distance (' + displayUnit + ')',
                         data: monthDistances,
                         backgroundColor: monthLabels.map(function(label) {
                             return selectedMonths.indexOf(label) >= 0 ? '#10b981' : colors[0];
@@ -1067,7 +1122,7 @@
                             beginAtZero: true,
                             ticks: {
                                 callback: function(value) {
-                                    return value + ' mi';
+                                    return value + ' ' + displayUnit;
                                 }
                             }
                         }
@@ -1198,7 +1253,7 @@
                     var percent = ((count / stats.totalRides) * 100).toFixed(1);
                     var barWidth = percent;
                     speedTableHTML += '<tr style="border-bottom: 1px solid #f3f4f6;">';
-                    speedTableHTML += '<td style="padding: 6px 8px; font-weight: 500;">' + range + ' mph</td>';
+                    speedTableHTML += '<td style="padding: 6px 8px; font-weight: 500;">' + range + ' ' + (displayUnit === 'mi' ? 'mph' : 'km/h') + '</td>';
                     speedTableHTML += '<td style="padding: 6px 8px; text-align: right;">' + count + '</td>';
                     speedTableHTML += '<td style="padding: 6px 8px; text-align: right;">';
                     speedTableHTML += '<div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">';
@@ -1234,7 +1289,7 @@
                     var percent = ((count / stats.totalRides) * 100).toFixed(1);
                     var barWidth = percent;
                     maxSpeedTableHTML += '<tr style="border-bottom: 1px solid #f3f4f6;">';
-                    maxSpeedTableHTML += '<td style="padding: 6px 8px; font-weight: 500;">' + range + ' mph</td>';
+                    maxSpeedTableHTML += '<td style="padding: 6px 8px; font-weight: 500;">' + range + ' ' + (displayUnit === 'mi' ? 'mph' : 'km/h') + '</td>';
                     maxSpeedTableHTML += '<td style="padding: 6px 8px; text-align: right;">' + count + '</td>';
                     maxSpeedTableHTML += '<td style="padding: 6px 8px; text-align: right;">';
                     maxSpeedTableHTML += '<div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">';
@@ -1261,10 +1316,10 @@
                 tableHTML += '<tr onclick="selectWheelModel(\'' + m.model + '\')" style="' + rowStyle + '">';
                 tableHTML += '<td><span class="color-box" style="background: ' + colors[n % colors.length] + '"></span>' + m.model + '</td>';
                 tableHTML += '<td>' + m.count + '</td>';
-                tableHTML += '<td>' + m.distance.toFixed(1) + ' mi</td>';
-                tableHTML += '<td>' + (m.distance / m.count).toFixed(1) + ' mi</td>';
-                tableHTML += '<td>' + m.avgSpeed + ' mph</td>';
-                tableHTML += '<td>' + m.maxSpeed + ' mph</td>';
+                tableHTML += '<td>' + formatDistance(m.distance) + '</td>';
+                tableHTML += '<td>' + formatDistance(m.distance / m.count) + '</td>';
+                tableHTML += '<td>' + formatSpeed(parseFloat(m.avgSpeed)) + '</td>';
+                tableHTML += '<td>' + formatSpeed(m.maxSpeed) + '</td>';
                 tableHTML += '<td>' + m.percent + '%</td>';
                 tableHTML += '</tr>';
             }
@@ -1345,7 +1400,7 @@
             
             minDistSlider.addEventListener('input', function() {
                 minDistanceFilter = parseFloat(this.value);
-                minDistValue.textContent = minDistanceFilter.toFixed(1) + ' mi';
+                minDistValue.textContent = formatDistance(minDistanceFilter);
                 applyFilters();
             });
             
@@ -1637,9 +1692,10 @@
                     } else {
                         wheelInfo = '<div style="position: absolute; top: 2px; right: 2px; font-size: 11px; font-weight: 600;">' + ridesByDate[day].length + 'x</div>';
                     }
+                    var distDisplay = convertDistance(totalMiles, dataUnit, displayUnit).toFixed(1);
                     dayContent = '<div style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">' +
                                  '<div style="font-size: 18px; font-weight: 600; line-height: 1;">' + day + '</div>' +
-                                 '<div style="font-size: 14px; margin-top: 4px; line-height: 1;">' + totalMiles.toFixed(1) + 'mi</div>' +
+                                 '<div style="font-size: 14px; margin-top: 4px; line-height: 1;">' + distDisplay + displayUnit + '</div>' +
                                  wheelInfo + '</div>';
                 }
 
@@ -1775,7 +1831,8 @@
                         } else {
                             wheelInfo = '<div style="position: absolute; top: 1px; right: 1px; font-size: ' + cornerSize + '; font-weight: 600;">' + ridesByDate[day].length + 'x</div>';
                         }
-                        dayContent = '<div style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;"><div style="font-size: ' + daySize + '; font-weight: 600;">' + day + '</div><div style="font-size: ' + mileSize + '; margin-top: 1px;">' + totalMiles.toFixed(1) + 'mi</div>' + wheelInfo + '</div>';
+                        var distDisplay = convertDistance(totalMiles, dataUnit, displayUnit).toFixed(1);
+                        dayContent = '<div style="position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;"><div style="font-size: ' + daySize + '; font-weight: 600;">' + day + '</div><div style="font-size: ' + mileSize + '; margin-top: 1px;">' + distDisplay + displayUnit + '</div>' + wheelInfo + '</div>';
                     }
 
                     html += '<div onclick="showRideDetails(' + year + ',' + month + ',' + day + ')" style="aspect-ratio: 1; background: ' + bgColor + '; color: ' + textColor + '; display: flex; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; border-radius: 2px; font-weight: ' + (hasRides ? '600' : '400') + ';' + boxShadow + '">' + dayContent + '</div>';
@@ -1811,7 +1868,7 @@
                 html += '<div style="padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #667eea;">';
                 html += '<div style="font-weight: 600; margin-bottom: 4px;">' + ride.model + '</div>';
                 html += '<div style="font-size: 14px; color: #666;">';
-                html += ride.distance.toFixed(1) + ' mi • Avg: ' + ride.avgSpeed + ' mph • Max: ' + ride.maxSpeed + ' mph';
+                html += formatDistance(ride.distance) + ' • Avg: ' + formatSpeed(ride.avgSpeed) + ' • Max: ' + formatSpeed(ride.maxSpeed);
                 html += '</div>';
                 html += '<div style="font-size: 12px; color: #999; margin-top: 4px;">' + ride.location + '</div>';
                 html += '</div>';
@@ -2024,8 +2081,14 @@
                     // Sync calendar zoom dropdown with current zoom value
                     document.getElementById('calendarZoom').value = calendarZoom;
 
+                    // Show unit toggle button and set initial text
+                    var unitToggle = document.getElementById('unitToggle');
+                    unitToggle.style.display = 'block';
+                    unitToggle.textContent = 'Show in ' + (displayUnit === 'mi' ? 'km' : 'mi');
+
                     document.getElementById('loading').style.display = 'none';
                     console.log('Dashboard updated successfully');
+                    console.log('Data unit:', dataUnit, 'Display unit:', displayUnit);
                 } catch (error) {
                     console.error('Error:', error);
                     document.getElementById('loading').textContent = 'Error: ' + error.message;
